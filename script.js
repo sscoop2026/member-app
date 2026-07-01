@@ -4,22 +4,11 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbx3DKfkzUCdlplSWCfIBSMZ9sXo1lDdHXqCk7dQDuub6ezPylFV3dIzeqMcW7jvsD2QXA/exec";
 
 const NOTICE_READ_KEY_BASE = "seosan_notice_read_key_by_member_0701";
+const MEMBER_CODE_STORAGE_KEY = "seosan_saved_member_code_0701";
 let CURRENT_NOTICE_KEY = "";
-const MEMBER_CODE = getMemberCode();
-
-function getMemberCode() {
-  const params = new URLSearchParams(window.location.search);
-  const code = (params.get("code") || "").trim();
-
-  if (code) {
-    localStorage.setItem("member_code", code);
-    return code;
-  }
-
-  return localStorage.getItem("member_code") || "";
-}
 
 window.addEventListener("DOMContentLoaded", function () {
+  updateStoredMemberCode();
   updateNoticeBadge(false);
   loadNotices();
   loadPartners();
@@ -27,9 +16,38 @@ window.addEventListener("DOMContentLoaded", function () {
   registerServiceWorker();
 });
 
-function getMemberCodeFromUrl() {
+function updateStoredMemberCode() {
   const params = new URLSearchParams(window.location.search);
-  return (params.get("code") || "").trim();
+  const codeFromUrl = (params.get("code") || "").trim();
+
+  if (codeFromUrl) {
+    localStorage.setItem(MEMBER_CODE_STORAGE_KEY, codeFromUrl);
+    sessionStorage.setItem(MEMBER_CODE_STORAGE_KEY, codeFromUrl);
+    return codeFromUrl;
+  }
+
+  const savedCode =
+    localStorage.getItem(MEMBER_CODE_STORAGE_KEY) ||
+    sessionStorage.getItem(MEMBER_CODE_STORAGE_KEY) ||
+    "";
+
+  if (savedCode) {
+    sessionStorage.setItem(MEMBER_CODE_STORAGE_KEY, savedCode);
+
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("code", savedCode);
+      window.history.replaceState({}, "", url.toString());
+    } catch (e) {}
+
+    return savedCode;
+  }
+
+  return "";
+}
+
+function getMemberCode() {
+  return updateStoredMemberCode();
 }
 
 function apiRequest(action, params) {
@@ -82,7 +100,7 @@ function apiRequest(action, params) {
 }
 
 function getNoticeReadKey() {
-  const code = MEMBER_CODE || "NO_CODE";
+  const code = getMemberCode() || "NO_CODE";
   return NOTICE_READ_KEY_BASE + "_" + code;
 }
 
@@ -174,6 +192,7 @@ function updateNoticeBadge(show) {
 }
 
 function openNoticeFromBell() {
+  updateStoredMemberCode();
   showPage("noticePage");
 
   if (CURRENT_NOTICE_KEY) {
@@ -276,7 +295,7 @@ function getPartnerIconClass(iconValue) {
 }
 
 function loadMember() {
-  const code = MEMBER_CODE;
+  const code = getMemberCode();
 
   const memberName = document.getElementById("memberName");
   const memberCompany = document.getElementById("memberCompany");
@@ -404,6 +423,11 @@ function escapeAttr(value) {
 
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("service-worker.js").catch(function () {});
+    navigator.serviceWorker
+      .register("service-worker.js")
+      .then(function (registration) {
+        registration.update();
+      })
+      .catch(function () {});
   }
 }
