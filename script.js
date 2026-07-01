@@ -1,7 +1,7 @@
 // ===== 설정 =====
 // 1) Code_api.gs를 새 Apps Script 웹앱으로 배포한 뒤,
 // 2) 아래 API_URL에 /exec 주소를 붙여넣으세요.
-const API_URL = "PASTE_APPS_SCRIPT_WEB_APP_URL_HERE";
+const API_URL = "https://script.google.com/macros/s/AKfycbx3DKfkzUCdlplSWCfIBSMZ9sXo1lDdHXqCk7dQDuub6ezPylFV3dIzeqMcW7jvsD2QXA/exec";
 
 const NOTICE_READ_KEY_BASE = "seosan_notice_read_key_by_member_0701";
 let CURRENT_NOTICE_KEY = "";
