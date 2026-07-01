@@ -5,7 +5,19 @@ const API_URL = "https://script.google.com/macros/s/AKfycbx3DKfkzUCdlplSWCfIBSMZ
 
 const NOTICE_READ_KEY_BASE = "seosan_notice_read_key_by_member_0701";
 let CURRENT_NOTICE_KEY = "";
-const MEMBER_CODE = getMemberCodeFromUrl();
+const MEMBER_CODE = getMemberCode();
+
+function getMemberCode() {
+  const params = new URLSearchParams(window.location.search);
+  const code = (params.get("code") || "").trim();
+
+  if (code) {
+    localStorage.setItem("member_code", code);
+    return code;
+  }
+
+  return localStorage.getItem("member_code") || "";
+}
 
 window.addEventListener("DOMContentLoaded", function () {
   updateNoticeBadge(false);
