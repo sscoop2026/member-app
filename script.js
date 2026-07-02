@@ -431,3 +431,23 @@ function registerServiceWorker() {
       .catch(function () {});
   }
 }
+let deferredPrompt;
+
+window.addEventListener("beforeinstallprompt", function (e) {
+  e.preventDefault();
+  deferredPrompt = e;
+});
+
+const installBtn = document.getElementById("installBtn");
+
+if (installBtn) {
+  installBtn.addEventListener("click", async function () {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    } else {
+      alert("홈 화면 추가 방법\n\n오른쪽 아래 점 3개 → 현재 페이지 추가 → 홈 화면을 선택해 주세요.");
+    }
+  });
+}
