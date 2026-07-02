@@ -441,9 +441,26 @@ window.addEventListener("beforeinstallprompt", function (e) {
 document.addEventListener("DOMContentLoaded", function () {
   const installBtn = document.getElementById("installBtn");
 
-  if (installBtn) {
-    installBtn.onclick = function () {
-      alert("홈 화면 추가 방법\n\n오른쪽 아래 점 3개 → 현재 페이지 추가 → 홈 화면");
-    };
-  }
+  if (!installBtn) return;
+
+  installBtn.addEventListener("click", async function () {
+
+    // 설치 가능한 브라우저(크롬 등)
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      return;
+    }
+
+    // 삼성인터넷 / 아이폰
+    alert(
+`📱 홈 화면에 추가하기
+
+① 오른쪽 아래 점 3개(⋮)를 누르세요.
+② 현재 페이지 추가를 선택하세요.
+③ 홈 화면을 선택하면 앱처럼 사용할 수 있습니다.`
+    );
+
+  });
 });
