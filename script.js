@@ -431,23 +431,30 @@ function registerServiceWorker() {
       .catch(function () {});
   }
 }
-let deferredPrompt;
+let deferredPrompt = null;
 
 window.addEventListener("beforeinstallprompt", function (e) {
   e.preventDefault();
   deferredPrompt = e;
 });
 
-const installBtn = document.getElementById("installBtn");
+document.addEventListener("DOMContentLoaded", function () {
+  const installBtn = document.getElementById("installBtn");
 
-if (installBtn) {
+  if (!installBtn) return;
+
   installBtn.addEventListener("click", async function () {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       await deferredPrompt.userChoice;
       deferredPrompt = null;
     } else {
-      alert("홈 화면 추가 방법\n\n오른쪽 아래 점 3개 → 현재 페이지 추가 → 홈 화면을 선택해 주세요.");
+      alert(
+        "홈 화면 추가 방법\n\n" +
+        "오른쪽 아래 점 3개를 누르세요.\n" +
+        "현재 페이지 추가를 누르세요.\n" +
+        "홈 화면을 선택하세요."
+      );
     }
   });
-}
+});
