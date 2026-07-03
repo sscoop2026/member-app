@@ -431,34 +431,54 @@ function registerServiceWorker() {
       .catch(function () {});
   }
 }
+
 document.addEventListener("DOMContentLoaded", function () {
   const installBtn = document.getElementById("installBtn");
   if (!installBtn) return;
 
   installBtn.addEventListener("click", function () {
-    const choice = prompt(
-`📱 홈 화면에 추가할 기기를 선택하세요.
+    showHomeInstallChoice();
+  });
+});
 
-1. 🤖 갤럭시
-2. 🍎 아이폰
+function showHomeInstallChoice() {
+  removeHomeInstallModal();
 
-숫자 1 또는 2를 입력하세요.`
-    );
+  const modal = document.createElement("div");
+  modal.id = "homeInstallModal";
+  modal.innerHTML = `
+    <div class="home-install-backdrop" onclick="removeHomeInstallModal()"></div>
+    <div class="home-install-box">
+      <button class="home-install-close" onclick="removeHomeInstallModal()">×</button>
+      <h3>📱 홈 화면에 추가하기</h3>
+      <p>사용 중인 휴대폰을 선택해 주세요.</p>
 
-    if (choice === "1") {
-      alert(
+      <button class="home-install-choice" onclick="showGalaxyInstallGuide()">
+        🤖 갤럭시
+      </button>
+
+      <button class="home-install-choice" onclick="showIphoneInstallGuide()">
+        🍎 아이폰
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function showGalaxyInstallGuide() {
+  alert(
 `🤖 갤럭시
 
 ① 오른쪽 아래 점 세 개(⋮)를 누르세요.
 ② 현재 페이지 추가를 누르세요.
 ③ 홈 화면을 누르세요.
 ④ 추가를 누르면 완료됩니다.`
-      );
-      return;
-    }
+  );
+}
 
-    if (choice === "2") {
-      alert(
+function showIphoneInstallGuide() {
+  alert(
 `🍎 아이폰
 
 ① 오른쪽 아래 점 세 개(…)를 누르세요.
@@ -466,7 +486,10 @@ document.addEventListener("DOMContentLoaded", function () {
 ③ 더보기를 누르세요.
 ④ 홈 화면에 추가를 누르세요.
 ⑤ 오른쪽 위 추가를 누르면 완료됩니다.`
-      );
-    }
-  });
-});
+  );
+}
+
+function removeHomeInstallModal() {
+  const modal = document.getElementById("homeInstallModal");
+  if (modal) modal.remove();
+}
