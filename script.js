@@ -347,7 +347,7 @@ function loadMember() {
         }
       }
 
-    const positionRow = document.getElementById("positionRow");
+const positionRow = document.getElementById("positionRow");
 
 if (position) {
   positionRow.style.display = "flex";
@@ -361,7 +361,6 @@ if (memberPosition && positionRow) {
     memberPosition.textContent = "";
   }
 }
-
       if (memberStatus) {
         memberStatus.textContent = "회원상태 : " + status;
         memberStatus.classList.remove("status-normal", "status-out");
