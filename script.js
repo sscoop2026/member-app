@@ -352,16 +352,14 @@ function loadMember() {
 if (position) {
   positionRow.style.display = "flex";
 
-  if (position === "정회원") {
-    memberPosition.textContent = "회원구분 : 정회원";
-  } else {
+if (memberPosition && positionRow) {
+  if (position) {
+    positionRow.style.display = "flex";
     memberPosition.textContent = "직위 : " + position;
+  } else {
+    positionRow.style.display = "none";
+    memberPosition.textContent = "";
   }
-
-} else {
-  positionRow.style.display = "none";
-  memberPosition.textContent = "";
-}
 }
 
       if (memberStatus) {
