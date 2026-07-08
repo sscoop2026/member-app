@@ -107,6 +107,7 @@ function getNoticeReadKey() {
 function loadNotices() {
   apiRequest("getNotices")
     .then(function (notices) {
+      alert(JSON.stringify(notices));
       const list = document.getElementById("noticeList");
       const fullList = document.getElementById("noticeListFull");
       const mainNotice = document.getElementById("mainNotice");
