@@ -1,6 +1,3 @@
-// ===== 설정 =====
-// 1) Code_api.gs를 새 Apps Script 웹앱으로 배포한 뒤,
-// 2) 아래 API_URL에 /exec 주소를 붙여넣으세요.
 const API_URL = "https://script.google.com/macros/s/AKfycbx3DKfkzUCdlplSWCfIBSMZ9sXo1lDdHXqCk7dQDuub6ezPylFV3dIzeqMcW7jvsD2QXA/exec";
 
 const NOTICE_READ_KEY_BASE = "seosan_notice_read_key_by_member_0701";
@@ -11,6 +8,13 @@ let CURRENT_NOTICES = [];
 let PENDING_NOTICE_ID = "";
 
 window.addEventListener("DOMContentLoaded", function () {
+  PENDING_NOTICE_ID = getNoticeIdFromUrl();
+
+  if (PENDING_NOTICE_ID) {
+    prepareNoticeDetailPage();
+    showPage("noticeDetailPage");
+  }
+
   updateStoredMemberCode();
   updateNoticeBadge(false);
   loadNotices();
@@ -51,12 +55,31 @@ function getNoticeIdFromUrl() {
   return String(params.get("notice") || "").trim();
 }
 
+function prepareNoticeDetailPage() {
+  if (document.getElementById("noticeDetailPage")) return;
+
+  const main = document.querySelector("main");
+  if (!main) return;
+
+  const section = document.createElement("section");
+  section.className = "page";
+  section.id = "noticeDetailPage";
+  section.innerHTML = `
+    <div class="section">
+      <h2>공지사항</h2>
+    </div>
+    <div id="noticeDetailBox">
+      <div class="card">
+        <p>공지사항을 불러오는 중입니다...</p>
+      </div>
+    </div>
+  `;
+
+  main.insertBefore(section, main.firstChild);
+}
+
 function apiRequest(action, params) {
   params = params || {};
-
-  if (!API_URL || API_URL === "PASTE_APPS_SCRIPT_WEB_APP_URL_HERE") {
-    return Promise.reject(new Error("API_URL이 설정되지 않았습니다."));
-  }
 
   return new Promise(function (resolve, reject) {
     const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -105,9 +128,19 @@ function getNoticeReadKey() {
   return NOTICE_READ_KEY_BASE + "_" + code;
 }
 
-function loadNotices() {
-  PENDING_NOTICE_ID = getNoticeIdFromUrl();
+function getNoticeId(item) {
+  return String(
+    item["번호"] ||
+    item["no"] ||
+    item["NO"] ||
+    item["No"] ||
+    item["id"] ||
+    item["ID"] ||
+    ""
+  ).trim();
+}
 
+function loadNotices() {
   apiRequest("getNotices")
     .then(function (notices) {
       const list = document.getElementById("noticeList");
@@ -120,32 +153,28 @@ function loadNotices() {
         if (mainNotice) mainNotice.textContent = "등록된 주요 안내가 없습니다.";
         if (list) list.innerHTML = `<div class="card"><p>등록된 공지사항이 없습니다.</p></div>`;
         if (fullList) fullList.innerHTML = `<div class="card"><p>등록된 지원사업이 없습니다.</p></div>`;
+        renderNoticeDetailNotFound();
         CURRENT_NOTICE_KEY = "";
         updateNoticeBadge(false);
         return;
       }
 
       const activeNotices = notices.filter(function (item) {
-        const status = String(item["상태"] || "진행중").trim();
-        return status === "진행중";
+        return String(item["상태"] || "진행중").trim() === "진행중";
       });
 
       if (mainNotice) {
-        if (activeNotices.length > 0) {
-          mainNotice.textContent = activeNotices[0]["제목"] || "등록된 주요 안내가 없습니다.";
-        } else {
-          mainNotice.textContent = "현재 진행중인 공지사항이 없습니다.";
-        }
+        mainNotice.textContent = activeNotices.length > 0
+          ? activeNotices[0]["제목"] || "등록된 주요 안내가 없습니다."
+          : "현재 진행중인 공지사항이 없습니다.";
       }
 
       const homeNotices = activeNotices.slice(0, 3);
 
       if (list) {
-        if (homeNotices.length === 0) {
-          list.innerHTML = `<div class="card"><p>현재 진행중인 공지사항이 없습니다.</p></div>`;
-        } else {
-          list.innerHTML = renderNoticeCards(homeNotices);
-        }
+        list.innerHTML = homeNotices.length === 0
+          ? `<div class="card"><p>현재 진행중인 공지사항이 없습니다.</p></div>`
+          : renderNoticeCards(homeNotices);
       }
 
       if (fullList) {
@@ -154,66 +183,36 @@ function loadNotices() {
 
       CURRENT_NOTICE_KEY = makeNoticesKey(notices);
       checkNoticeBadge();
-      handleNoticeDeepLink();
+
+      if (PENDING_NOTICE_ID) {
+        renderNoticeDetail(PENDING_NOTICE_ID, notices);
+      }
     })
     .catch(function () {
       const mainNotice = document.getElementById("mainNotice");
       if (mainNotice) mainNotice.textContent = "공지사항을 불러오지 못했습니다.";
+
+      const detailBox = document.getElementById("noticeDetailBox");
+      if (detailBox) {
+        detailBox.innerHTML = `<div class="card"><p>공지사항을 불러오지 못했습니다.</p></div>`;
+      }
     });
 }
 
-function renderNoticeCards(notices) {
-  let html = "";
+function renderNoticeDetail(noticeId, notices) {
+  const detailBox = document.getElementById("noticeDetailBox");
+  if (!detailBox) return;
 
-  notices.forEach(function (item) {
-    const noticeId = escapeAttr(item["번호"] || item["NO"] || item["No"] || "");
-    const status = String(item["상태"] || "진행중").trim();
-    const isClosed = status === "마감";
-
-    const category = escapeHtml(item["구분"] || "공지");
-    const title = escapeHtml(item["제목"] || "");
-    const content = escapeHtml(item["내용"] || "");
-    const link = escapeAttr(item["링크"] || "");
-    const button = escapeHtml(item["버튼명"] || "자세히 보기");
-
-    html += `
-      <div class="card ${isClosed ? "notice-closed" : ""}" id="notice-card-${noticeId}">
-        <span class="tag">${category}</span>
-        ${isClosed ? `<span class="tag notice-closed-tag">마감</span>` : ""}
-        <h3>${title}</h3>
-        <p>${content}</p>
-        ${
-          isClosed
-            ? `<button class="btn notice-closed-btn" disabled>마감되었습니다</button>`
-            : `<button class="btn" onclick="openLink('${link}')">${button}</button>`
-        }
-      </div>
-    `;
+  const target = notices.find(function (item) {
+    return getNoticeId(item) === String(noticeId);
   });
 
-  return html;
-}
+  if (!target) {
+    renderNoticeDetailNotFound();
+    return;
+  }
 
-function handleNoticeDeepLink() {
-  const noticeId = PENDING_NOTICE_ID;
-  if (!noticeId) return;
-
-  showPage("noticePage");
-
-  setTimeout(function () {
-    const target = document.getElementById("notice-card-" + CSS.escape(noticeId));
-
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      target.style.outline = "3px solid #2563eb";
-      target.style.outlineOffset = "3px";
-
-      setTimeout(function () {
-        target.style.outline = "";
-        target.style.outlineOffset = "";
-      }, 2500);
-    }
-  }, 300);
+  detailBox.innerHTML = renderSingleNoticeCard(target);
 
   if (CURRENT_NOTICE_KEY) {
     const readKey = getNoticeReadKey();
@@ -222,22 +221,69 @@ function handleNoticeDeepLink() {
   }
 }
 
+function renderNoticeDetailNotFound() {
+  const detailBox = document.getElementById("noticeDetailBox");
+  if (!detailBox) return;
+
+  detailBox.innerHTML = `
+    <div class="card">
+      <h3>공지사항을 찾을 수 없습니다.</h3>
+      <p>해당 공지가 삭제되었거나 링크가 올바르지 않습니다.</p>
+    </div>
+  `;
+}
+
+function renderSingleNoticeCard(item) {
+  const status = String(item["상태"] || "진행중").trim();
+  const isClosed = status === "마감";
+
+  const category = escapeHtml(item["구분"] || "공지");
+  const title = escapeHtml(item["제목"] || "");
+  const content = escapeHtml(item["내용"] || "");
+  const link = escapeAttr(item["링크"] || "");
+  const button = escapeHtml(item["버튼명"] || "자세히 보기");
+
+  return `
+    <div class="card ${isClosed ? "notice-closed" : ""}">
+      <span class="tag">${category}</span>
+      ${isClosed ? `<span class="tag notice-closed-tag">마감</span>` : ""}
+      <h3>${title}</h3>
+      <p>${content}</p>
+      ${
+        isClosed
+          ? `<button class="btn notice-closed-btn" disabled>마감되었습니다</button>`
+          : `<button class="btn" onclick="openLink('${link}')">${button}</button>`
+      }
+    </div>
+  `;
+}
+
+function renderNoticeCards(notices) {
+  let html = "";
+
+  notices.forEach(function (item) {
+    html += renderSingleNoticeCard(item);
+  });
+
+  return html;
+}
+
 function makeNoticesKey(notices) {
   if (!notices || notices.length === 0) return "";
 
-  const data = notices.map(function (item) {
-    return {
-      id: item["번호"] || "",
-      status: item["상태"] || "",
-      category: item["구분"] || "",
-      title: item["제목"] || "",
-      content: item["내용"] || "",
-      link: item["링크"] || "",
-      button: item["버튼명"] || ""
-    };
-  });
-
-  return JSON.stringify(data);
+  return JSON.stringify(
+    notices.map(function (item) {
+      return {
+        id: getNoticeId(item),
+        status: item["상태"] || "",
+        category: item["구분"] || "",
+        title: item["제목"] || "",
+        content: item["내용"] || "",
+        link: item["링크"] || "",
+        button: item["버튼명"] || ""
+      };
+    })
+  );
 }
 
 function checkNoticeBadge() {
@@ -291,7 +337,6 @@ function loadPartners() {
       }
 
       html += `<div class="partner-list">`;
-
       partners.reverse();
 
       partners.forEach(function (item) {
@@ -415,12 +460,9 @@ function loadMember() {
       if (memberPosition && positionRow) {
         if (position) {
           positionRow.style.display = "flex";
-
-          if (position === "정회원") {
-            memberPosition.textContent = "회원구분 : 정회원";
-          } else {
-            memberPosition.textContent = "직위 : " + position;
-          }
+          memberPosition.textContent = position === "정회원"
+            ? "회원구분 : 정회원"
+            : "직위 : " + position;
         } else {
           positionRow.style.display = "none";
           memberPosition.textContent = "";
@@ -473,9 +515,7 @@ function showMemberAccessGuide(message) {
         공통 공지 링크로 접속한 경우 공지사항은 확인할 수 있지만,
         모바일 회원증은 최초 안내받은 개인 고유 링크로 접속해야 사용할 수 있습니다.
       </p>
-      <p>
-        문의 : 서산시소상공인연합회 041-663-9999
-      </p>
+      <p>문의 : 서산시소상공인연합회 041-663-9999</p>
     </div>
   `;
 }
@@ -491,12 +531,8 @@ function showMemberBlockedGuide(status) {
     <div class="card">
       <h3>현재 회원증을 사용할 수 없습니다.</h3>
       <p>회원상태 : ${escapeHtml(status)}</p>
-      <p>
-        회원증 이용 관련 문의는 서산시소상공인연합회로 연락해 주세요.
-      </p>
-      <p>
-        문의 : 서산시소상공인연합회 041-663-9999
-      </p>
+      <p>회원증 이용 관련 문의는 서산시소상공인연합회로 연락해 주세요.</p>
+      <p>문의 : 서산시소상공인연합회 041-663-9999</p>
     </div>
   `;
 }
@@ -583,13 +619,8 @@ function showHomeInstallChoice() {
       <h3>📱 홈 화면에 추가하기</h3>
       <p>사용 중인 휴대폰을 선택해 주세요.</p>
 
-      <button class="home-install-choice" onclick="showGalaxyInstallGuide()">
-        🤖 갤럭시
-      </button>
-
-      <button class="home-install-choice" onclick="showIphoneInstallGuide()">
-        🍎 아이폰
-      </button>
+      <button class="home-install-choice" onclick="showGalaxyInstallGuide()">🤖 갤럭시</button>
+      <button class="home-install-choice" onclick="showIphoneInstallGuide()">🍎 아이폰</button>
     </div>
   `;
 
