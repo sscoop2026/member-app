@@ -223,9 +223,11 @@ function loadPartners() {
         return;
       }
 
-      html += `<div class="partner-list">`;
+    html += `<div class="partner-list">`;
 
-      partners.forEach(function (item) {
+partners.reverse();
+
+partners.forEach(function (item) {
         const name = escapeHtml(item["업체명"] || "");
         const benefit = escapeHtml(item["내용"] || "");
         const link = escapeAttr(item["링크"] || "");
