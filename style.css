@@ -430,12 +430,12 @@ body {
   transform: translateY(1px);
 }
 .notice-closed {
-  background: #f1f1f1;
-  color: #777;
+  background: #f1f1f1 !important;
+  color: #777 !important;
   opacity: 0.75;
 }
 
-.notice-closed .btn {
-  background: #999;
+.notice-closed-btn {
+  background: #999 !important;
   cursor: not-allowed;
 }
