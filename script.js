@@ -213,12 +213,7 @@ function renderNoticeDetail(noticeId, notices) {
   }
 
   detailBox.innerHTML = renderSingleNoticeCard(target);
-
-  if (CURRENT_NOTICE_KEY) {
-    const readKey = getNoticeReadKey();
-    localStorage.setItem(readKey, CURRENT_NOTICE_KEY);
-    updateNoticeBadge(false);
-  }
+  markNoticeAsRead();
 }
 
 function renderNoticeDetailNotFound() {
@@ -271,19 +266,25 @@ function renderNoticeCards(notices) {
 function makeNoticesKey(notices) {
   if (!notices || notices.length === 0) return "";
 
-  return JSON.stringify(
-    notices.map(function (item) {
-      return {
-        id: getNoticeId(item),
-        status: item["상태"] || "",
-        category: item["구분"] || "",
-        title: item["제목"] || "",
-        content: item["내용"] || "",
-        link: item["링크"] || "",
-        button: item["버튼명"] || ""
-      };
+  const ids = notices
+    .map(function (item) {
+      return Number(getNoticeId(item));
     })
-  );
+    .filter(function (id) {
+      return !isNaN(id);
+    });
+
+  if (ids.length === 0) return "";
+
+  return String(Math.max.apply(null, ids));
+}
+
+function markNoticeAsRead() {
+  if (!CURRENT_NOTICE_KEY) return;
+
+  const readKey = getNoticeReadKey();
+  localStorage.setItem(readKey, CURRENT_NOTICE_KEY);
+  updateNoticeBadge(false);
 }
 
 function checkNoticeBadge() {
@@ -307,13 +308,7 @@ function updateNoticeBadge(show) {
 function openNoticeFromBell() {
   updateStoredMemberCode();
   showPage("noticePage");
-
-  if (CURRENT_NOTICE_KEY) {
-    const readKey = getNoticeReadKey();
-    localStorage.setItem(readKey, CURRENT_NOTICE_KEY);
-  }
-
-  updateNoticeBadge(false);
+  markNoticeAsRead();
 }
 
 function resetNoticeReadForTest() {
@@ -581,6 +576,10 @@ function showPage(pageId, btn) {
   document.querySelectorAll("nav button").forEach(function (button) {
     button.classList.remove("active");
   });
+
+  if (pageId === "noticePage") {
+    markNoticeAsRead();
+  }
 
   if (btn) btn.classList.add("active");
 }
