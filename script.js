@@ -107,8 +107,6 @@ function getNoticeReadKey() {
 function loadNotices() {
   apiRequest("getNotices")
     .then(function (notices) {
-    alert("공지개수: " + notices.length + "\n" + JSON.stringify(notices));
-
       const list = document.getElementById("noticeList");
       const fullList = document.getElementById("noticeListFull");
       const mainNotice = document.getElementById("mainNotice");
@@ -130,24 +128,28 @@ function loadNotices() {
       }
 
       let html = "";
+
       notices.forEach(function (item) {
+        const status = String(item["상태"] || "진행중").trim();
+        const isClosed = status === "마감";
+
         const category = escapeHtml(item["구분"] || "공지");
         const title = escapeHtml(item["제목"] || "");
         const content = escapeHtml(item["내용"] || "");
         const link = escapeAttr(item["링크"] || "");
         const button = escapeHtml(item["버튼명"] || "자세히 보기");
-     const status = String(item["상태"] || "진행중").trim();
-const isClosed = status === "마감";
-const cardClass = isClosed ? "card notice-closed" : "card";
-const finalButton = isClosed ? "마감되었습니다" : button;
-const disabledAttr = isClosed ? "disabled" : "";
 
         html += `
-         <div class="${cardClass}">
+          <div class="card ${isClosed ? "notice-closed" : ""}">
             <span class="tag">${category}</span>
+            ${isClosed ? `<span class="tag notice-closed-tag">마감</span>` : ""}
             <h3>${title}</h3>
             <p>${content}</p>
-            <button class="btn ${isClosed ? "notice-closed-btn" : ""}" ${disabledAttr} onclick="${isClosed ? "return false;" : `openLink('${link}')`}">${finalButton}</button>
+            ${
+              isClosed
+                ? `<button class="btn notice-closed-btn" disabled>마감되었습니다</button>`
+                : `<button class="btn" onclick="openLink('${link}')">${button}</button>`
+            }
           </div>
         `;
       });
@@ -169,6 +171,7 @@ function makeNoticesKey(notices) {
 
   const data = notices.map(function (item) {
     return {
+      status: item["상태"] || "",
       category: item["구분"] || "",
       title: item["제목"] || "",
       content: item["내용"] || "",
@@ -230,11 +233,11 @@ function loadPartners() {
         return;
       }
 
-    html += `<div class="partner-list">`;
+      html += `<div class="partner-list">`;
 
-partners.reverse();
+      partners.reverse();
 
-partners.forEach(function (item) {
+      partners.forEach(function (item) {
         const name = escapeHtml(item["업체명"] || "");
         const benefit = escapeHtml(item["내용"] || "");
         const link = escapeAttr(item["링크"] || "");
@@ -263,7 +266,9 @@ partners.forEach(function (item) {
     })
     .catch(function () {
       const partnerPage = document.getElementById("partnerPage");
-      if (partnerPage) partnerPage.innerHTML = `<div class="section"><h2>제휴업체</h2></div><div class="card"><p>제휴업체를 불러오지 못했습니다.</p></div>`;
+      if (partnerPage) {
+        partnerPage.innerHTML = `<div class="section"><h2>제휴업체</h2></div><div class="card"><p>제휴업체를 불러오지 못했습니다.</p></div>`;
+      }
     });
 }
 
@@ -356,28 +361,32 @@ function loadMember() {
         }
       }
 
-const positionRow = document.getElementById("positionRow");
+      const positionRow = document.getElementById("positionRow");
 
-if (memberPosition && positionRow) {
-  if (position) {
-    positionRow.style.display = "flex";
+      if (memberPosition && positionRow) {
+        if (position) {
+          positionRow.style.display = "flex";
 
-    if (position === "정회원") {
-      memberPosition.textContent = "회원구분 : 정회원";
-    } else {
-      memberPosition.textContent = "직위 : " + position;
-    }
+          if (position === "정회원") {
+            memberPosition.textContent = "회원구분 : 정회원";
+          } else {
+            memberPosition.textContent = "직위 : " + position;
+          }
+        } else {
+          positionRow.style.display = "none";
+          memberPosition.textContent = "";
+        }
+      }
 
-  } else {
-    positionRow.style.display = "none";
-    memberPosition.textContent = "";
-  }
-}
       if (memberStatus) {
         memberStatus.textContent = "회원상태 : " + status;
         memberStatus.classList.remove("status-normal", "status-out");
-        if (status === "정상") memberStatus.classList.add("status-normal");
-        else if (status === "탈퇴") memberStatus.classList.add("status-out");
+
+        if (status === "정상") {
+          memberStatus.classList.add("status-normal");
+        } else if (status === "탈퇴") {
+          memberStatus.classList.add("status-out");
+        }
       }
 
       if (memberTime) {
@@ -517,6 +526,7 @@ function removeHomeInstallModal() {
   const modal = document.getElementById("homeInstallModal");
   if (modal) modal.remove();
 }
+
 function refreshMemberTime() {
   const memberTime = document.getElementById("memberTime");
   if (!memberTime) return;
