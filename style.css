@@ -439,3 +439,16 @@ body {
   background: #999 !important;
   cursor: not-allowed;
 }
+.notice-closed {
+  opacity: 0.6;
+}
+
+.notice-closed-tag {
+  background: #9ca3af;
+}
+
+.notice-closed-btn {
+  background: #bdbdbd !important;
+  color: #ffffff !important;
+  cursor: not-allowed;
+}
