@@ -134,13 +134,18 @@ function loadNotices() {
         const content = escapeHtml(item["내용"] || "");
         const link = escapeAttr(item["링크"] || "");
         const button = escapeHtml(item["버튼명"] || "자세히 보기");
+        const status = item["상태"] || "진행중";
+const isClosed = status === "마감";
+const cardClass = isClosed ? "card notice-closed" : "card";
+const finalButton = isClosed ? "마감되었습니다" : button;
+const disabledAttr = isClosed ? "disabled" : "";
 
         html += `
-          <div class="card">
+         <div class="${cardClass}">
             <span class="tag">${category}</span>
             <h3>${title}</h3>
             <p>${content}</p>
-            <button class="btn" onclick="openLink('${link}')">${button}</button>
+            <button class="btn" ${disabledAttr} onclick="${isClosed ? "" : `openLink('${link}')`}">${finalButton}</button>
           </div>
         `;
       });
