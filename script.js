@@ -5,7 +5,10 @@ const API_URL = "https://script.google.com/macros/s/AKfycbx3DKfkzUCdlplSWCfIBSMZ
 
 const NOTICE_READ_KEY_BASE = "seosan_notice_read_key_by_member_0701";
 const MEMBER_CODE_STORAGE_KEY = "seosan_saved_member_code_0701";
+
 let CURRENT_NOTICE_KEY = "";
+let CURRENT_NOTICES = [];
+let PENDING_NOTICE_ID = "";
 
 window.addEventListener("DOMContentLoaded", function () {
   updateStoredMemberCode();
@@ -33,13 +36,6 @@ function updateStoredMemberCode() {
 
   if (savedCode) {
     sessionStorage.setItem(MEMBER_CODE_STORAGE_KEY, savedCode);
-
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("code", savedCode);
-      window.history.replaceState({}, "", url.toString());
-    } catch (e) {}
-
     return savedCode;
   }
 
@@ -48,6 +44,11 @@ function updateStoredMemberCode() {
 
 function getMemberCode() {
   return updateStoredMemberCode();
+}
+
+function getNoticeIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return String(params.get("notice") || "").trim();
 }
 
 function apiRequest(action, params) {
@@ -105,11 +106,15 @@ function getNoticeReadKey() {
 }
 
 function loadNotices() {
+  PENDING_NOTICE_ID = getNoticeIdFromUrl();
+
   apiRequest("getNotices")
     .then(function (notices) {
       const list = document.getElementById("noticeList");
       const fullList = document.getElementById("noticeListFull");
       const mainNotice = document.getElementById("mainNotice");
+
+      CURRENT_NOTICES = notices || [];
 
       if (!notices || notices.length === 0) {
         if (mainNotice) mainNotice.textContent = "등록된 주요 안내가 없습니다.";
@@ -149,6 +154,7 @@ function loadNotices() {
 
       CURRENT_NOTICE_KEY = makeNoticesKey(notices);
       checkNoticeBadge();
+      handleNoticeDeepLink();
     })
     .catch(function () {
       const mainNotice = document.getElementById("mainNotice");
@@ -160,6 +166,7 @@ function renderNoticeCards(notices) {
   let html = "";
 
   notices.forEach(function (item) {
+    const noticeId = escapeAttr(item["번호"] || item["NO"] || item["No"] || "");
     const status = String(item["상태"] || "진행중").trim();
     const isClosed = status === "마감";
 
@@ -170,7 +177,7 @@ function renderNoticeCards(notices) {
     const button = escapeHtml(item["버튼명"] || "자세히 보기");
 
     html += `
-      <div class="card ${isClosed ? "notice-closed" : ""}">
+      <div class="card ${isClosed ? "notice-closed" : ""}" id="notice-card-${noticeId}">
         <span class="tag">${category}</span>
         ${isClosed ? `<span class="tag notice-closed-tag">마감</span>` : ""}
         <h3>${title}</h3>
@@ -187,11 +194,40 @@ function renderNoticeCards(notices) {
   return html;
 }
 
+function handleNoticeDeepLink() {
+  const noticeId = PENDING_NOTICE_ID;
+  if (!noticeId) return;
+
+  showPage("noticePage");
+
+  setTimeout(function () {
+    const target = document.getElementById("notice-card-" + CSS.escape(noticeId));
+
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.style.outline = "3px solid #2563eb";
+      target.style.outlineOffset = "3px";
+
+      setTimeout(function () {
+        target.style.outline = "";
+        target.style.outlineOffset = "";
+      }, 2500);
+    }
+  }, 300);
+
+  if (CURRENT_NOTICE_KEY) {
+    const readKey = getNoticeReadKey();
+    localStorage.setItem(readKey, CURRENT_NOTICE_KEY);
+    updateNoticeBadge(false);
+  }
+}
+
 function makeNoticesKey(notices) {
   if (!notices || notices.length === 0) return "";
 
   const data = notices.map(function (item) {
     return {
+      id: item["번호"] || "",
       status: item["상태"] || "",
       category: item["구분"] || "",
       title: item["제목"] || "",
@@ -335,6 +371,7 @@ function loadMember() {
   const memberName = document.getElementById("memberName");
   const memberCompany = document.getElementById("memberCompany");
   const companyRow = document.getElementById("companyRow");
+  const positionRow = document.getElementById("positionRow");
   const memberPosition = document.getElementById("memberPosition");
   const memberStatus = document.getElementById("memberStatus");
   const memberTime = document.getElementById("memberTime");
@@ -342,26 +379,14 @@ function loadMember() {
   const memberQR = document.getElementById("memberQR");
 
   if (!code) {
-    if (memberName) memberName.textContent = "회원정보 없음";
-    if (companyRow) companyRow.style.display = "none";
-    if (memberPosition) memberPosition.textContent = "";
-    if (memberStatus) memberStatus.textContent = "";
-    if (memberTime) memberTime.textContent = "";
-    if (memberQR) memberQR.innerHTML = "";
-    if (memberLinkBtn) memberLinkBtn.style.display = "none";
+    showMemberAccessGuide();
     return;
   }
 
   apiRequest("getMemberByCode", { code: code })
     .then(function (member) {
       if (!member) {
-        if (memberName) memberName.textContent = "회원정보를 찾을 수 없습니다.";
-        if (companyRow) companyRow.style.display = "none";
-        if (memberPosition) memberPosition.textContent = "";
-        if (memberStatus) memberStatus.textContent = "";
-        if (memberTime) memberTime.textContent = "";
-        if (memberQR) memberQR.innerHTML = "";
-        if (memberLinkBtn) memberLinkBtn.style.display = "none";
+        showMemberAccessGuide("회원정보를 찾을 수 없습니다.");
         return;
       }
 
@@ -369,6 +394,11 @@ function loadMember() {
       const position = member["직위"] || "";
       const status = member["회원상태"] || "";
       const verifyLink = member["업체확인용링크"] || window.location.href;
+
+      if (status && status !== "정상") {
+        showMemberBlockedGuide(status);
+        return;
+      }
 
       if (memberName) memberName.textContent = member["회원명"] || "";
 
@@ -381,8 +411,6 @@ function loadMember() {
           memberCompany.textContent = "";
         }
       }
-
-      const positionRow = document.getElementById("positionRow");
 
       if (memberPosition && positionRow) {
         if (position) {
@@ -427,8 +455,50 @@ function loadMember() {
       if (memberLinkBtn) memberLinkBtn.style.display = "none";
     })
     .catch(function () {
-      if (memberName) memberName.textContent = "회원정보를 불러오지 못했습니다.";
+      showMemberAccessGuide("회원정보를 불러오지 못했습니다.");
     });
+}
+
+function showMemberAccessGuide(message) {
+  const memberPage = document.getElementById("memberPage");
+  if (!memberPage) return;
+
+  memberPage.innerHTML = `
+    <div class="section">
+      <h2>모바일 회원증</h2>
+    </div>
+    <div class="card">
+      <h3>${escapeHtml(message || "회원증은 개인 고유 링크로 접속해야 이용할 수 있습니다.")}</h3>
+      <p>
+        공통 공지 링크로 접속한 경우 공지사항은 확인할 수 있지만,
+        모바일 회원증은 최초 안내받은 개인 고유 링크로 접속해야 사용할 수 있습니다.
+      </p>
+      <p>
+        문의 : 서산시소상공인연합회 041-663-9999
+      </p>
+    </div>
+  `;
+}
+
+function showMemberBlockedGuide(status) {
+  const memberPage = document.getElementById("memberPage");
+  if (!memberPage) return;
+
+  memberPage.innerHTML = `
+    <div class="section">
+      <h2>모바일 회원증</h2>
+    </div>
+    <div class="card">
+      <h3>현재 회원증을 사용할 수 없습니다.</h3>
+      <p>회원상태 : ${escapeHtml(status)}</p>
+      <p>
+        회원증 이용 관련 문의는 서산시소상공인연합회로 연락해 주세요.
+      </p>
+      <p>
+        문의 : 서산시소상공인연합회 041-663-9999
+      </p>
+    </div>
+  `;
 }
 
 function formatNow() {
@@ -448,6 +518,12 @@ function openLink(url) {
 }
 
 function showPage(pageId, btn) {
+  updateStoredMemberCode();
+
+  if (pageId === "memberPage" && !getMemberCode()) {
+    showMemberAccessGuide();
+  }
+
   document.querySelectorAll(".page").forEach(function (page) {
     page.classList.remove("active");
   });
