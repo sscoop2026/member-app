@@ -111,51 +111,41 @@ function loadNotices() {
       const fullList = document.getElementById("noticeListFull");
       const mainNotice = document.getElementById("mainNotice");
 
-      if (mainNotice && notices && notices.length > 0) {
-        mainNotice.textContent = notices[0]["제목"] || "등록된 주요 안내가 없습니다.";
-      }
-
       if (!notices || notices.length === 0) {
-        if (list) {
-          list.innerHTML = `<div class="card"><p>등록된 공지사항이 없습니다.</p></div>`;
-        }
-        if (fullList) {
-          fullList.innerHTML = `<div class="card"><p>등록된 지원사업이 없습니다.</p></div>`;
-        }
+        if (mainNotice) mainNotice.textContent = "등록된 주요 안내가 없습니다.";
+        if (list) list.innerHTML = `<div class="card"><p>등록된 공지사항이 없습니다.</p></div>`;
+        if (fullList) fullList.innerHTML = `<div class="card"><p>등록된 지원사업이 없습니다.</p></div>`;
         CURRENT_NOTICE_KEY = "";
         updateNoticeBadge(false);
         return;
       }
 
-      let html = "";
-
-      notices.forEach(function (item) {
+      const activeNotices = notices.filter(function (item) {
         const status = String(item["상태"] || "진행중").trim();
-        const isClosed = status === "마감";
-
-        const category = escapeHtml(item["구분"] || "공지");
-        const title = escapeHtml(item["제목"] || "");
-        const content = escapeHtml(item["내용"] || "");
-        const link = escapeAttr(item["링크"] || "");
-        const button = escapeHtml(item["버튼명"] || "자세히 보기");
-
-        html += `
-          <div class="card ${isClosed ? "notice-closed" : ""}">
-            <span class="tag">${category}</span>
-            ${isClosed ? `<span class="tag notice-closed-tag">마감</span>` : ""}
-            <h3>${title}</h3>
-            <p>${content}</p>
-            ${
-              isClosed
-                ? `<button class="btn notice-closed-btn" disabled>마감되었습니다</button>`
-                : `<button class="btn" onclick="openLink('${link}')">${button}</button>`
-            }
-          </div>
-        `;
+        return status === "진행중";
       });
 
-      if (list) list.innerHTML = html;
-      if (fullList) fullList.innerHTML = html;
+      if (mainNotice) {
+        if (activeNotices.length > 0) {
+          mainNotice.textContent = activeNotices[0]["제목"] || "등록된 주요 안내가 없습니다.";
+        } else {
+          mainNotice.textContent = "현재 진행중인 공지사항이 없습니다.";
+        }
+      }
+
+      const homeNotices = activeNotices.slice(0, 3);
+
+      if (list) {
+        if (homeNotices.length === 0) {
+          list.innerHTML = `<div class="card"><p>현재 진행중인 공지사항이 없습니다.</p></div>`;
+        } else {
+          list.innerHTML = renderNoticeCards(homeNotices);
+        }
+      }
+
+      if (fullList) {
+        fullList.innerHTML = renderNoticeCards(notices);
+      }
 
       CURRENT_NOTICE_KEY = makeNoticesKey(notices);
       checkNoticeBadge();
@@ -164,6 +154,37 @@ function loadNotices() {
       const mainNotice = document.getElementById("mainNotice");
       if (mainNotice) mainNotice.textContent = "공지사항을 불러오지 못했습니다.";
     });
+}
+
+function renderNoticeCards(notices) {
+  let html = "";
+
+  notices.forEach(function (item) {
+    const status = String(item["상태"] || "진행중").trim();
+    const isClosed = status === "마감";
+
+    const category = escapeHtml(item["구분"] || "공지");
+    const title = escapeHtml(item["제목"] || "");
+    const content = escapeHtml(item["내용"] || "");
+    const link = escapeAttr(item["링크"] || "");
+    const button = escapeHtml(item["버튼명"] || "자세히 보기");
+
+    html += `
+      <div class="card ${isClosed ? "notice-closed" : ""}">
+        <span class="tag">${category}</span>
+        ${isClosed ? `<span class="tag notice-closed-tag">마감</span>` : ""}
+        <h3>${title}</h3>
+        <p>${content}</p>
+        ${
+          isClosed
+            ? `<button class="btn notice-closed-btn" disabled>마감되었습니다</button>`
+            : `<button class="btn" onclick="openLink('${link}')">${button}</button>`
+        }
+      </div>
+    `;
+  });
+
+  return html;
 }
 
 function makeNoticesKey(notices) {
