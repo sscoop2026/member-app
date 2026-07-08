@@ -429,3 +429,13 @@ body {
 .member-refresh-btn:active {
   transform: translateY(1px);
 }
+.notice-closed {
+  background: #f1f1f1;
+  color: #777;
+  opacity: 0.75;
+}
+
+.notice-closed .btn {
+  background: #999;
+  cursor: not-allowed;
+}
