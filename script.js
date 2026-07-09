@@ -518,7 +518,9 @@ function showMemberAccessGuide(message) {
       <p>서산시소상공인연합회</p>
 
       <p>
-        <a href="tel:0416639999">041-663-9999</a>
+      <a href="tel:0416639999" class="phone-btn">
+  ☎ 041-663-9999
+</a>
       </p>
     </div>
   `;
