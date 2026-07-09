@@ -10,18 +10,51 @@ let PENDING_NOTICE_ID = "";
 window.addEventListener("DOMContentLoaded", function () {
   PENDING_NOTICE_ID = getNoticeIdFromUrl();
 
-  if (PENDING_NOTICE_ID) {
-    prepareNoticeDetailPage();
-    showPage("noticeDetailPage");
-  }
-
   updateStoredMemberCode();
   updateNoticeBadge(false);
-  loadNotices();
-  loadPartners();
-  loadMember();
   registerServiceWorker();
+
+  checkMemberBeforeAppStart();
 });
+function checkMemberBeforeAppStart() {
+  const code = getMemberCode();
+
+  if (!code) {
+    if (PENDING_NOTICE_ID) {
+      prepareNoticeDetailPage();
+      showPage("noticeDetailPage");
+    }
+
+    loadNotices();
+    loadPartners();
+    loadMember();
+    return;
+  }
+
+  apiRequest("getMemberByCode", { code: code })
+    .then(function (member) {
+      const status = member ? String(member["회원상태"] || "").trim() : "";
+
+      if (status && status !== "정상") {
+        showMemberBlockedGuide(status);
+        return;
+      }
+
+      if (PENDING_NOTICE_ID) {
+        prepareNoticeDetailPage();
+        showPage("noticeDetailPage");
+      }
+
+      loadNotices();
+      loadPartners();
+      loadMember();
+    })
+    .catch(function () {
+      loadNotices();
+      loadPartners();
+      loadMember();
+    });
+}
 
 function updateStoredMemberCode() {
   const params = new URLSearchParams(window.location.search);
