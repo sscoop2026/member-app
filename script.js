@@ -21,7 +21,6 @@ window.addEventListener("DOMContentLoaded", function () {
 function checkMemberBeforeAppStart() {
   const params = new URLSearchParams(window.location.search);
   const codeFromUrl = (params.get("code") || "").trim();
-  const code = getMemberCode();
 
   if (!codeFromUrl && PENDING_NOTICE_ID) {
     IS_GUEST_NOTICE_MODE = true;
@@ -30,9 +29,10 @@ function checkMemberBeforeAppStart() {
     showPage("noticeDetailPage");
 
     loadNotices();
-    loadMember();
     return;
   }
+
+  const code = getMemberCode();
 
   if (!code) {
     loadNotices();
@@ -65,6 +65,7 @@ function checkMemberBeforeAppStart() {
       loadMember();
     });
 }
+
 
 function updateStoredMemberCode() {
   const params = new URLSearchParams(window.location.search);
