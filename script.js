@@ -527,19 +527,27 @@ function showMemberAccessGuide(message) {
 }
 
 function showMemberBlockedGuide(status) {
-  const memberPage = document.getElementById("memberPage");
-  if (!memberPage) return;
+  const phone = document.querySelector(".phone");
+  if (!phone) return;
 
-  memberPage.innerHTML = `
-    <div class="section">
-      <h2>모바일 회원증</h2>
-    </div>
-    <div class="card">
-      <h3>현재 회원증을 사용할 수 없습니다.</h3>
-      <p>회원상태 : ${escapeHtml(status)}</p>
-      <p>회원증 이용 관련 문의는 서산시소상공인연합회로 연락해 주세요.</p>
-      <p>문의 : 서산시소상공인연합회 041-663-9999</p>
-    </div>
+  phone.innerHTML = `
+    <main>
+      <section class="page active">
+        <div class="section">
+          <h2>회원앱 이용 안내</h2>
+        </div>
+
+        <div class="card">
+          <h3>회원님의 회원 자격이 종료되어<br>서비스를 이용하실 수 없습니다.</h3>
+
+          <p>문의 : 서산시소상공인연합회</p>
+
+          <a href="tel:0416639999" class="phone-btn">
+            ☎ 041-663-9999
+          </a>
+        </div>
+      </section>
+    </main>
   `;
 }
 
