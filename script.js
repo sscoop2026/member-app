@@ -527,27 +527,26 @@ function showMemberAccessGuide(message) {
 }
 
 function showMemberBlockedGuide(status) {
-  const phone = document.querySelector(".phone");
-  if (!phone) return;
+  document.body.innerHTML = `
+    <div class="phone">
+      <main>
+        <section class="page active">
+          <div class="section">
+            <h2>회원앱 이용 안내</h2>
+          </div>
 
-  phone.innerHTML = `
-    <main>
-      <section class="page active">
-        <div class="section">
-          <h2>회원앱 이용 안내</h2>
-        </div>
+          <div class="card">
+            <h3>회원님의 회원 자격이 종료되어<br>서비스를 이용하실 수 없습니다.</h3>
 
-        <div class="card">
-          <h3>회원님의 회원 자격이 종료되어<br>서비스를 이용하실 수 없습니다.</h3>
+            <p>문의 : 서산시소상공인연합회</p>
 
-          <p>문의 : 서산시소상공인연합회</p>
-
-          <a href="tel:0416639999" class="phone-btn">
-            ☎ 041-663-9999
-          </a>
-        </div>
-      </section>
-    </main>
+            <a href="tel:0416639999" class="phone-btn">
+              ☎ 041-663-9999
+            </a>
+          </div>
+        </section>
+      </main>
+    </div>
   `;
 }
 
