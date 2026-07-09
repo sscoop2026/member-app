@@ -485,3 +485,22 @@ body {
 #memberPage .card a[href^="tel"]:active {
   transform: translateY(1px);
 }
+.phone-btn{
+  display:block;
+  width:100%;
+  box-sizing:border-box;
+  margin-top:12px;
+  padding:14px;
+  border-radius:14px;
+  background:#2563eb;
+  color:#fff !important;
+  text-align:center;
+  text-decoration:none;
+  font-size:18px;
+  font-weight:900;
+  box-shadow:0 4px 12px rgba(37,99,235,.25);
+}
+
+.phone-btn:active{
+  transform:scale(.98);
+}
