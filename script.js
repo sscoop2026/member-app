@@ -21,8 +21,12 @@ window.addEventListener("DOMContentLoaded", function () {
 function checkMemberBeforeAppStart() {
   const params = new URLSearchParams(window.location.search);
   const codeFromUrl = (params.get("code") || "").trim();
+  const savedCode =
+    localStorage.getItem(MEMBER_CODE_STORAGE_KEY) ||
+    sessionStorage.getItem(MEMBER_CODE_STORAGE_KEY) ||
+    "";
 
-  if (!codeFromUrl && PENDING_NOTICE_ID) {
+  if (!codeFromUrl && PENDING_NOTICE_ID && !savedCode) {
     IS_GUEST_NOTICE_MODE = true;
 
     prepareNoticeDetailPage();
