@@ -506,21 +506,19 @@ function showMemberAccessGuide(message) {
     </div>
     <div class="card">
       <h3>모바일 회원증 이용 안내</h3>
+
+      <p>현재 접속하신 링크는 공지사항 확인용 링크입니다.</p>
+
+      <p>모바일 회원증은 회원 전용 앱을 이용해 주세요.</p>
+
+      <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;">
+
+      <h3 style="margin-bottom:10px;">📞 문의</h3>
+
+      <p>서산시소상공인연합회</p>
+
       <p>
-        현재 접속하신 링크는 공지사항 확인용 링크입니다.
-      </p>
-      <p>
-        모바일 회원증 이용을 위해서는<br>
-        최초 안내받은 회원 전용 링크를<br>
-        이용해 주세요.
-      </p>
-      <p>
-        접속 후에는 홈 화면에 추가하여<br>
-        더 편리하게 이용하실 수 있습니다.
-      </p>
-      <p>
-        문의 : 서산시소상공인연합회<br>
-        ☎ 041-663-9999
+        <a href="tel:0416639999">041-663-9999</a>
       </p>
     </div>
   `;
