@@ -151,11 +151,12 @@ body {
     margin: 0 0 6px;
   }
 
-  .card p {
-    font-size: 13px;
-    color: #6b7280;
-    margin: 0;
-  }
+.card p {
+  font-size: 15px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.45;
+}
 
   .btn {
     margin-top: 12px;
