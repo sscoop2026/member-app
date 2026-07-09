@@ -457,3 +457,14 @@ body {
   color: #ffffff !important;
   cursor: not-allowed;
 }
+#memberPage .card p{
+    font-size:16px;
+    line-height:1.6;
+}
+
+#memberPage .card a{
+    font-size:17px;
+    font-weight:700;
+    color:#2563eb;
+    text-decoration:none;
+}
