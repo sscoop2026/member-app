@@ -565,12 +565,14 @@ function showGuestOnlyGuide(pageId, btn) {
     </div>
     <div class="card">
       <h3>회원 전용 서비스입니다.</h3>
-      <p>공지 전체 목록, 제휴업체 혜택, 모바일 회원증은 회원 가입 후 이용하실 수 있습니다.</p>
+     <p class="guest-text">
+  공지 전체 목록, 제휴업체 혜택, 모바일 회원증은 회원 가입 후 이용하실 수 있습니다.
+</p>
 
-      <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;">
+<hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;">
 
-      <p>회원 가입 및 이용 문의</p>
-      <p>서산시소상공인연합회</p>
+<p class="guest-text">회원 가입 및 이용 문의</p>
+<p class="guest-text">서산시소상공인연합회</p>
 
       <a href="tel:0416639999" class="phone-btn">
         ☎ 041-663-9999
