@@ -382,7 +382,7 @@ function loadPartners() {
       const partnerPage = document.getElementById("partnerPage");
       if (!partnerPage) return;
 
-      let html = `<div class="section"><h2>제휴업체</h2></div>`;
+    let html = "";
 
       if (!partners || partners.length === 0) {
         html += `<div class="card"><p>등록된 제휴업체가 없습니다.</p></div>`;
