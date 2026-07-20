@@ -399,10 +399,18 @@ function loadPartners() {
         const link = escapeAttr(item["링크"] || "");
         const buttonName = escapeHtml(item["버튼명"] || "자세히 보기");
         const iconClass = getPartnerIconClass(item["아이콘"] || item["업종"] || "");
+        const logoFile = String(item["로고파일"] || "").trim();
+
+const partnerImage = logoFile
+  ? `<img src="logos/${encodeURIComponent(logoFile)}"
+      alt="${name}"
+      style="width:100%;height:100%;object-fit:contain;"
+      onerror="this.outerHTML='<i class=&quot;fa-solid ${iconClass}&quot;></i>';">`
+  : `<i class="fa-solid ${iconClass}"></i>`;
 
         html += `
           <div class="partner-card">
-            <div class="partner-icon"><i class="fa-solid ${iconClass}"></i></div>
+          <div class="partner-icon">${partnerImage}</div>
             <div class="partner-body">
               <h3 class="partner-name">${name}</h3>
               <p class="partner-benefit">${benefit}</p>
