@@ -45,8 +45,9 @@ function checkMemberBeforeAppStart() {
     return;
   }
 
-  apiRequest("getMemberByCode", { code: code })
-    .then(function (member) {
+  apiRequest("getAppData", { code: code })
+    .then(function (appData) {
+      const member = appData ? appData.member : null;
       const status = member ? String(member["회원상태"] || "").trim() : "";
 
       if (status && status !== "정상") {
@@ -59,8 +60,8 @@ function checkMemberBeforeAppStart() {
         showPage("noticeDetailPage");
       }
 
-      loadNotices();
-      loadPartners();
+      renderNotices(appData ? appData.notices : []);
+      renderPartners(appData ? appData.partners : []);
       loadMember(member);
     })
     .catch(function () {
@@ -191,6 +192,20 @@ function getNoticeId(item) {
 function loadNotices() {
   apiRequest("getNotices")
     .then(function (notices) {
+      renderNotices(notices);
+    })
+    .catch(function () {
+      const mainNotice = document.getElementById("mainNotice");
+      if (mainNotice) mainNotice.textContent = "공지사항을 불러오지 못했습니다.";
+
+      const detailBox = document.getElementById("noticeDetailBox");
+      if (detailBox) {
+        detailBox.innerHTML = `<div class="card"><p>공지사항을 불러오지 못했습니다.</p></div>`;
+      }
+    });
+}
+
+function renderNotices(notices) {
       const list = document.getElementById("noticeList");
       const fullList = document.getElementById("noticeListFull");
       const mainNotice = document.getElementById("mainNotice");
@@ -246,16 +261,6 @@ function loadNotices() {
       if (PENDING_NOTICE_ID) {
         renderNoticeDetail(PENDING_NOTICE_ID, notices);
       }
-    })
-    .catch(function () {
-      const mainNotice = document.getElementById("mainNotice");
-      if (mainNotice) mainNotice.textContent = "공지사항을 불러오지 못했습니다.";
-
-      const detailBox = document.getElementById("noticeDetailBox");
-      if (detailBox) {
-        detailBox.innerHTML = `<div class="card"><p>공지사항을 불러오지 못했습니다.</p></div>`;
-      }
-    });
 }
 
 function renderNoticeDetail(noticeId, notices) {
@@ -379,6 +384,17 @@ function resetNoticeReadForTest() {
 function loadPartners() {
   apiRequest("getPartners")
     .then(function (partners) {
+      renderPartners(partners);
+    })
+    .catch(function () {
+      const partnerPage = document.getElementById("partnerPage");
+      if (partnerPage) {
+        partnerPage.innerHTML = `<div class="section"><h2>제휴업체</h2></div><div class="card"><p>제휴업체를 불러오지 못했습니다.</p></div>`;
+      }
+    });
+}
+
+function renderPartners(partners) {
       const partnerPage = document.getElementById("partnerPage");
       if (!partnerPage) return;
 
@@ -427,13 +443,6 @@ const partnerImage = logoFile
 
       html += `</div>`;
       partnerPage.innerHTML = html;
-    })
-    .catch(function () {
-      const partnerPage = document.getElementById("partnerPage");
-      if (partnerPage) {
-        partnerPage.innerHTML = `<div class="section"><h2>제휴업체</h2></div><div class="card"><p>제휴업체를 불러오지 못했습니다.</p></div>`;
-      }
-    });
 }
 
 function getPartnerIconClass(iconValue) {
@@ -472,7 +481,7 @@ function getPartnerIconClass(iconValue) {
   return normalized ? "fa-" + normalized : "fa-handshake";
 }
 
-function loadMember(memberFromCheck) {
+function loadMember(memberFromAppData) {
   const code = getMemberCode();
 
   const memberName = document.getElementById("memberName");
@@ -490,8 +499,8 @@ function loadMember(memberFromCheck) {
     return;
   }
 
-  const memberRequest = memberFromCheck
-    ? Promise.resolve(memberFromCheck)
+  const memberRequest = memberFromAppData
+    ? Promise.resolve(memberFromAppData)
     : apiRequest("getMemberByCode", { code: code });
 
   memberRequest
