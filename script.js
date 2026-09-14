@@ -61,7 +61,7 @@ function checkMemberBeforeAppStart() {
 
       loadNotices();
       loadPartners();
-      loadMember();
+      loadMember(member);
     })
     .catch(function () {
       loadNotices();
@@ -472,7 +472,7 @@ function getPartnerIconClass(iconValue) {
   return normalized ? "fa-" + normalized : "fa-handshake";
 }
 
-function loadMember() {
+function loadMember(memberFromCheck) {
   const code = getMemberCode();
 
   const memberName = document.getElementById("memberName");
@@ -490,7 +490,11 @@ function loadMember() {
     return;
   }
 
-  apiRequest("getMemberByCode", { code: code })
+  const memberRequest = memberFromCheck
+    ? Promise.resolve(memberFromCheck)
+    : apiRequest("getMemberByCode", { code: code });
+
+  memberRequest
     .then(function (member) {
       if (!member) {
         showMemberAccessGuide("회원정보를 찾을 수 없습니다.");
