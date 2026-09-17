@@ -45,10 +45,14 @@ function checkMemberBeforeAppStart() {
     return;
   }
 
-  apiRequest("getAppData", { code: code })
-    .then(function (appData) {
-      const member = appData ? appData.member : null;
+  apiRequest("getMemberByCode", { code: code })
+    .then(function (member) {
       const status = member ? String(member["회원상태"] || "").trim() : "";
+
+      if (!member) {
+        showMemberAccessGuide("회원정보를 찾을 수 없습니다.");
+        return;
+      }
 
       if (status && status !== "정상") {
         showMemberBlockedGuide(status);
@@ -60,14 +64,15 @@ function checkMemberBeforeAppStart() {
         showPage("noticeDetailPage");
       }
 
-      renderNotices(appData ? appData.notices : []);
-      renderPartners(appData ? appData.partners : []);
       loadMember(member);
+
+      setTimeout(function () {
+        loadNotices();
+        loadPartners();
+      }, 0);
     })
     .catch(function () {
-      loadNotices();
-      loadPartners();
-      loadMember();
+      showMemberAccessGuide("회원정보를 불러오지 못했습니다.");
     });
 }
 
