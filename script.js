@@ -26,13 +26,15 @@ function checkMemberBeforeAppStart() {
     sessionStorage.getItem(MEMBER_CODE_STORAGE_KEY) ||
     "";
 
-  if (!codeFromUrl && PENDING_NOTICE_ID && !savedCode) {
-    IS_GUEST_NOTICE_MODE = true;
-
+  // 공지 전용 링크는 회원 확인보다 해당 공지를 먼저 요청해 화면에 표시한다.
+  if (PENDING_NOTICE_ID) {
     prepareNoticeDetailPage();
     showPage("noticeDetailPage");
+    loadNoticeDetail(PENDING_NOTICE_ID);
+  }
 
-    loadNotices();
+  if (!codeFromUrl && PENDING_NOTICE_ID && !savedCode) {
+    IS_GUEST_NOTICE_MODE = true;
     return;
   }
 
@@ -45,8 +47,11 @@ function checkMemberBeforeAppStart() {
     return;
   }
 
-  apiRequest("getMemberByCode", { code: code })
-    .then(function (member) {
+  // 회원 앱은 기존의 3단계 요청 대신 한 번의 getAppData 요청으로
+  // 회원/공지/제휴 데이터를 함께 받아 최초 데이터 대기시간을 줄인다.
+  apiRequest("getAppData", { code: code })
+    .then(function (appData) {
+      const member = appData ? appData.member : null;
       const status = member ? String(member["회원상태"] || "").trim() : "";
 
       if (!member) {
@@ -59,17 +64,9 @@ function checkMemberBeforeAppStart() {
         return;
       }
 
-      if (PENDING_NOTICE_ID) {
-        prepareNoticeDetailPage();
-        showPage("noticeDetailPage");
-      }
-
       loadMember(member);
-
-      setTimeout(function () {
-        loadNotices();
-        loadPartners();
-      }, 0);
+      renderNotices((appData && appData.notices) || []);
+      renderPartners((appData && appData.partners) || []);
     })
     .catch(function () {
       showMemberAccessGuide("회원정보를 불러오지 못했습니다.");
@@ -194,6 +191,27 @@ function getNoticeId(item) {
   ).trim();
 }
 
+function loadNoticeDetail(noticeId) {
+  apiRequest("getNoticeById", { id: noticeId })
+    .then(function (notice) {
+      const detailBox = document.getElementById("noticeDetailBox");
+      if (!detailBox) return;
+
+      if (!notice) {
+        renderNoticeDetailNotFound();
+        return;
+      }
+
+      detailBox.innerHTML = renderSingleNoticeCard(notice);
+    })
+    .catch(function () {
+      const detailBox = document.getElementById("noticeDetailBox");
+      if (detailBox) {
+        detailBox.innerHTML = `<div class="card"><p>공지사항을 불러오지 못했습니다.</p></div>`;
+      }
+    });
+}
+
 function loadNotices() {
   apiRequest("getNotices")
     .then(function (notices) {
@@ -236,9 +254,6 @@ function renderNotices(notices) {
         if (list) list.innerHTML = `<div class="card"><p>공지 목록은 회원 전용 서비스입니다.</p></div>`;
         if (fullList) fullList.innerHTML = `<div class="card"><p>공지 목록은 회원 전용 서비스입니다.</p></div>`;
 
-        if (PENDING_NOTICE_ID) {
-          renderNoticeDetail(PENDING_NOTICE_ID, notices);
-        }
         return;
       }
 
@@ -263,9 +278,6 @@ function renderNotices(notices) {
       CURRENT_NOTICE_KEY = makeNoticesKey(notices);
       checkNoticeBadge();
 
-      if (PENDING_NOTICE_ID) {
-        renderNoticeDetail(PENDING_NOTICE_ID, notices);
-      }
 }
 
 function renderNoticeDetail(noticeId, notices) {
