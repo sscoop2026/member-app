@@ -2,6 +2,8 @@ const API_URL = "https://script.google.com/macros/s/AKfycbx3DKfkzUCdlplSWCfIBSMZ
 
 const NOTICE_READ_KEY_BASE = "seosan_notice_read_key_by_member_0701";
 const MEMBER_CODE_STORAGE_KEY = "seosan_saved_member_code_0701";
+const NOTICE_CACHE_KEY = "seosan_notice_cache_0921";
+const PARTNER_CACHE_KEY = "seosan_partner_cache_0921";
 
 let CURRENT_NOTICE_KEY = "";
 let CURRENT_NOTICES = [];
@@ -14,6 +16,10 @@ window.addEventListener("DOMContentLoaded", function () {
   updateStoredMemberCode();
   updateNoticeBadge(false);
   registerServiceWorker();
+
+  if (!PENDING_NOTICE_ID) {
+    renderCachedPublicData();
+  }
 
   checkMemberBeforeAppStart();
 });
@@ -212,9 +218,43 @@ function loadNoticeDetail(noticeId) {
     });
 }
 
+function readDataCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    return parsed && Array.isArray(parsed.data) ? parsed.data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeDataCache(key, data) {
+  if (!Array.isArray(data)) return;
+
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      savedAt: Date.now(),
+      data: data
+    }));
+  } catch (e) {}
+}
+
+function renderCachedPublicData() {
+  if (IS_GUEST_NOTICE_MODE) return;
+
+  const notices = readDataCache(NOTICE_CACHE_KEY);
+  const partners = readDataCache(PARTNER_CACHE_KEY);
+
+  if (notices) renderNotices(notices);
+  if (partners) renderPartners(partners);
+}
+
 function loadNotices() {
   apiRequest("getNotices")
     .then(function (notices) {
+      writeDataCache(NOTICE_CACHE_KEY, notices);
       renderNotices(notices);
     })
     .catch(function () {
@@ -401,6 +441,7 @@ function resetNoticeReadForTest() {
 function loadPartners() {
   apiRequest("getPartners")
     .then(function (partners) {
+      writeDataCache(PARTNER_CACHE_KEY, partners);
       renderPartners(partners);
     })
     .catch(function () {
