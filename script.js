@@ -2,8 +2,6 @@ const API_URL = "https://script.google.com/macros/s/AKfycbx3DKfkzUCdlplSWCfIBSMZ
 
 const NOTICE_READ_KEY_BASE = "seosan_notice_read_key_by_member_0701";
 const MEMBER_CODE_STORAGE_KEY = "seosan_saved_member_code_0701";
-const NOTICE_CACHE_KEY = "seosan_notice_cache_0921";
-const PARTNER_CACHE_KEY = "seosan_partner_cache_0921";
 
 let CURRENT_NOTICE_KEY = "";
 let CURRENT_NOTICES = [];
@@ -17,10 +15,6 @@ window.addEventListener("DOMContentLoaded", function () {
   updateNoticeBadge(false);
   registerServiceWorker();
 
-  if (!PENDING_NOTICE_ID) {
-    renderCachedPublicData();
-  }
-
   checkMemberBeforeAppStart();
 });
 
@@ -32,15 +26,13 @@ function checkMemberBeforeAppStart() {
     sessionStorage.getItem(MEMBER_CODE_STORAGE_KEY) ||
     "";
 
-  // 공지 전용 링크는 회원 확인보다 해당 공지를 먼저 요청해 화면에 표시한다.
-  if (PENDING_NOTICE_ID) {
-    prepareNoticeDetailPage();
-    showPage("noticeDetailPage");
-    loadNoticeDetail(PENDING_NOTICE_ID);
-  }
-
   if (!codeFromUrl && PENDING_NOTICE_ID && !savedCode) {
     IS_GUEST_NOTICE_MODE = true;
+
+    prepareNoticeDetailPage();
+    showPage("noticeDetailPage");
+
+    loadNotices();
     return;
   }
 
@@ -53,32 +45,49 @@ function checkMemberBeforeAppStart() {
     return;
   }
 
-  // 회원 앱은 기존의 3단계 요청 대신 한 번의 getAppData 요청으로
-  // 회원/공지/제휴 데이터를 함께 받아 최초 데이터 대기시간을 줄인다.
-  apiRequest("getAppData", { code: code })
-    .then(function (appData) {
-      const member = appData ? appData.member : null;
-      const status = member ? String(member["회원상태"] || "").trim() : "";
+  apiRequest("getMemberByCode", { code: code })
+    .then(function (member) {
+      if (member) {
+        const status = String(member["회원상태"] || "").trim();
 
-      if (!member) {
-        showMemberAccessGuide("회원정보를 찾을 수 없습니다.");
+        if (status && status !== "정상") {
+          showMemberBlockedGuide(status);
+          return;
+        }
+
+        startMemberApp();
         return;
       }
 
-      if (status && status !== "정상") {
-        showMemberBlockedGuide(status);
-        return;
-      }
+      return apiRequest("getMasterMemberStatus", { code: code })
+        .then(function (masterMember) {
+          const masterStatus = masterMember
+            ? String(masterMember["회원상태"] || "").trim()
+            : "";
 
-      loadMember(member);
-      renderNotices((appData && appData.notices) || []);
-      renderPartners((appData && appData.partners) || []);
+          if (masterStatus === "탈퇴") {
+            showMemberBlockedGuide(masterStatus);
+            return;
+          }
+
+          startMemberApp();
+        });
     })
     .catch(function () {
-      showMemberAccessGuide("회원정보를 불러오지 못했습니다.");
+      startMemberApp();
     });
 }
 
+function startMemberApp() {
+  if (PENDING_NOTICE_ID) {
+    prepareNoticeDetailPage();
+    showPage("noticeDetailPage");
+  }
+
+  loadNotices();
+  loadPartners();
+  loadMember();
+}
 
 function updateStoredMemberCode() {
   const params = new URLSearchParams(window.location.search);
@@ -139,7 +148,12 @@ function apiRequest(action, params) {
   params = params || {};
 
   return new Promise(function (resolve, reject) {
-    const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    const callbackName =
+      "jsonp_cb_" +
+      Date.now() +
+      "_" +
+      Math.random().toString(36).slice(2);
+
     const query = new URLSearchParams();
 
     query.set("action", action);
@@ -150,6 +164,7 @@ function apiRequest(action, params) {
     });
 
     const script = document.createElement("script");
+
     const timeout = setTimeout(function () {
       cleanup();
       reject(new Error("API 요청 시간이 초과되었습니다."));
@@ -158,16 +173,25 @@ function apiRequest(action, params) {
     function cleanup() {
       clearTimeout(timeout);
       delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
+
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
     }
 
     window[callbackName] = function (response) {
       cleanup();
+
       if (response && response.ok === false) {
         reject(new Error(response.error || "API 오류"));
         return;
       }
-      resolve(response && response.data !== undefined ? response.data : response);
+
+      resolve(
+        response && response.data !== undefined
+          ? response.data
+          : response
+      );
     };
 
     script.onerror = function () {
@@ -197,78 +221,9 @@ function getNoticeId(item) {
   ).trim();
 }
 
-function loadNoticeDetail(noticeId) {
-  apiRequest("getNoticeById", { id: noticeId })
-    .then(function (notice) {
-      const detailBox = document.getElementById("noticeDetailBox");
-      if (!detailBox) return;
-
-      if (!notice) {
-        renderNoticeDetailNotFound();
-        return;
-      }
-
-      detailBox.innerHTML = renderSingleNoticeCard(notice);
-    })
-    .catch(function () {
-      const detailBox = document.getElementById("noticeDetailBox");
-      if (detailBox) {
-        detailBox.innerHTML = `<div class="card"><p>공지사항을 불러오지 못했습니다.</p></div>`;
-      }
-    });
-}
-
-function readDataCache(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw);
-    return parsed && Array.isArray(parsed.data) ? parsed.data : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function writeDataCache(key, data) {
-  if (!Array.isArray(data)) return;
-
-  try {
-    localStorage.setItem(key, JSON.stringify({
-      savedAt: Date.now(),
-      data: data
-    }));
-  } catch (e) {}
-}
-
-function renderCachedPublicData() {
-  if (IS_GUEST_NOTICE_MODE) return;
-
-  const notices = readDataCache(NOTICE_CACHE_KEY);
-  const partners = readDataCache(PARTNER_CACHE_KEY);
-
-  if (notices) renderNotices(notices);
-  if (partners) renderPartners(partners);
-}
-
 function loadNotices() {
   apiRequest("getNotices")
     .then(function (notices) {
-      writeDataCache(NOTICE_CACHE_KEY, notices);
-      renderNotices(notices);
-    })
-    .catch(function () {
-      const mainNotice = document.getElementById("mainNotice");
-      if (mainNotice) mainNotice.textContent = "공지사항을 불러오지 못했습니다.";
-
-      const detailBox = document.getElementById("noticeDetailBox");
-      if (detailBox) {
-        detailBox.innerHTML = `<div class="card"><p>공지사항을 불러오지 못했습니다.</p></div>`;
-      }
-    });
-}
-
-function renderNotices(notices) {
       const list = document.getElementById("noticeList");
       const fullList = document.getElementById("noticeListFull");
       const mainNotice = document.getElementById("mainNotice");
@@ -276,10 +231,22 @@ function renderNotices(notices) {
       CURRENT_NOTICES = notices || [];
 
       if (!notices || notices.length === 0) {
-        if (mainNotice) mainNotice.textContent = "등록된 주요 안내가 없습니다.";
-        if (list) list.innerHTML = `<div class="card"><p>등록된 공지사항이 없습니다.</p></div>`;
-        if (fullList) fullList.innerHTML = `<div class="card"><p>등록된 지원사업이 없습니다.</p></div>`;
+        if (mainNotice) {
+          mainNotice.textContent = "등록된 주요 안내가 없습니다.";
+        }
+
+        if (list) {
+          list.innerHTML =
+            `<div class="card"><p>등록된 공지사항이 없습니다.</p></div>`;
+        }
+
+        if (fullList) {
+          fullList.innerHTML =
+            `<div class="card"><p>등록된 지원사업이 없습니다.</p></div>`;
+        }
+
         renderNoticeDetailNotFound();
+
         CURRENT_NOTICE_KEY = "";
         updateNoticeBadge(false);
         return;
@@ -290,25 +257,42 @@ function renderNotices(notices) {
       });
 
       if (IS_GUEST_NOTICE_MODE) {
-        if (mainNotice) mainNotice.textContent = "전달받은 공지를 확인해 주세요.";
-        if (list) list.innerHTML = `<div class="card"><p>공지 목록은 회원 전용 서비스입니다.</p></div>`;
-        if (fullList) fullList.innerHTML = `<div class="card"><p>공지 목록은 회원 전용 서비스입니다.</p></div>`;
+        if (mainNotice) {
+          mainNotice.textContent = "전달받은 공지를 확인해 주세요.";
+        }
+
+        if (list) {
+          list.innerHTML =
+            `<div class="card"><p>공지 목록은 회원 전용 서비스입니다.</p></div>`;
+        }
+
+        if (fullList) {
+          fullList.innerHTML =
+            `<div class="card"><p>공지 목록은 회원 전용 서비스입니다.</p></div>`;
+        }
+
+        if (PENDING_NOTICE_ID) {
+          renderNoticeDetail(PENDING_NOTICE_ID, notices);
+        }
 
         return;
       }
 
       if (mainNotice) {
-        mainNotice.textContent = activeNotices.length > 0
-          ? activeNotices[0]["제목"] || "등록된 주요 안내가 없습니다."
-          : "현재 진행중인 공지사항이 없습니다.";
+        mainNotice.textContent =
+          activeNotices.length > 0
+            ? activeNotices[0]["제목"] ||
+              "등록된 주요 안내가 없습니다."
+            : "현재 진행중인 공지사항이 없습니다.";
       }
 
       const homeNotices = activeNotices.slice(0, 3);
 
       if (list) {
-        list.innerHTML = homeNotices.length === 0
-          ? `<div class="card"><p>현재 진행중인 공지사항이 없습니다.</p></div>`
-          : renderNoticeCards(homeNotices);
+        list.innerHTML =
+          homeNotices.length === 0
+            ? `<div class="card"><p>현재 진행중인 공지사항이 없습니다.</p></div>`
+            : renderNoticeCards(homeNotices);
       }
 
       if (fullList) {
@@ -318,10 +302,32 @@ function renderNotices(notices) {
       CURRENT_NOTICE_KEY = makeNoticesKey(notices);
       checkNoticeBadge();
 
+      if (PENDING_NOTICE_ID) {
+        renderNoticeDetail(PENDING_NOTICE_ID, notices);
+      }
+    })
+    .catch(function () {
+      const mainNotice = document.getElementById("mainNotice");
+
+      if (mainNotice) {
+        mainNotice.textContent =
+          "공지사항을 불러오지 못했습니다.";
+      }
+
+      const detailBox =
+        document.getElementById("noticeDetailBox");
+
+      if (detailBox) {
+        detailBox.innerHTML =
+          `<div class="card"><p>공지사항을 불러오지 못했습니다.</p></div>`;
+      }
+    });
 }
 
 function renderNoticeDetail(noticeId, notices) {
-  const detailBox = document.getElementById("noticeDetailBox");
+  const detailBox =
+    document.getElementById("noticeDetailBox");
+
   if (!detailBox) return;
 
   const target = notices.find(function (item) {
@@ -333,12 +339,16 @@ function renderNoticeDetail(noticeId, notices) {
     return;
   }
 
-  detailBox.innerHTML = renderSingleNoticeCard(target);
+  detailBox.innerHTML =
+    renderSingleNoticeCard(target);
+
   markNoticeAsRead();
 }
 
 function renderNoticeDetailNotFound() {
-  const detailBox = document.getElementById("noticeDetailBox");
+  const detailBox =
+    document.getElementById("noticeDetailBox");
+
   if (!detailBox) return;
 
   detailBox.innerHTML = `
@@ -350,21 +360,38 @@ function renderNoticeDetailNotFound() {
 }
 
 function renderSingleNoticeCard(item) {
-  const status = String(item["상태"] || "진행중").trim();
+  const status =
+    String(item["상태"] || "진행중").trim();
+
   const isClosed = status === "마감";
 
-  const category = escapeHtml(item["구분"] || "공지");
-  const title = escapeHtml(item["제목"] || "");
-  const content = escapeHtml(item["내용"] || "");
-  const link = escapeAttr(item["링크"] || "");
-  const button = escapeHtml(item["버튼명"] || "자세히 보기");
+  const category =
+    escapeHtml(item["구분"] || "공지");
+
+  const title =
+    escapeHtml(item["제목"] || "");
+
+  const content =
+    escapeHtml(item["내용"] || "");
+
+  const link =
+    escapeAttr(item["링크"] || "");
+
+  const button =
+    escapeHtml(item["버튼명"] || "자세히 보기");
 
   return `
     <div class="card ${isClosed ? "notice-closed" : ""}">
       <span class="tag">${category}</span>
-      ${isClosed ? `<span class="tag notice-closed-tag">마감</span>` : ""}
+      ${
+        isClosed
+          ? `<span class="tag notice-closed-tag">마감</span>`
+          : ""
+      }
+
       <h3>${title}</h3>
       <p>${content}</p>
+
       ${
         isClosed
           ? `<button class="btn notice-closed-btn" disabled>마감되었습니다</button>`
@@ -385,7 +412,9 @@ function renderNoticeCards(notices) {
 }
 
 function makeNoticesKey(notices) {
-  if (!notices || notices.length === 0) return "";
+  if (!notices || notices.length === 0) {
+    return "";
+  }
 
   const ids = notices
     .map(function (item) {
@@ -395,7 +424,9 @@ function makeNoticesKey(notices) {
       return !isNaN(id);
     });
 
-  if (ids.length === 0) return "";
+  if (ids.length === 0) {
+    return "";
+  }
 
   return String(Math.max.apply(null, ids));
 }
@@ -404,26 +435,39 @@ function markNoticeAsRead() {
   if (!CURRENT_NOTICE_KEY) return;
 
   const readKey = getNoticeReadKey();
-  localStorage.setItem(readKey, CURRENT_NOTICE_KEY);
+
+  localStorage.setItem(
+    readKey,
+    CURRENT_NOTICE_KEY
+  );
+
   updateNoticeBadge(false);
 }
 
 function checkNoticeBadge() {
   const readKey = getNoticeReadKey();
-  const lastReadKey = localStorage.getItem(readKey) || "";
+
+  const lastReadKey =
+    localStorage.getItem(readKey) || "";
 
   if (!CURRENT_NOTICE_KEY) {
     updateNoticeBadge(false);
     return;
   }
 
-  updateNoticeBadge(CURRENT_NOTICE_KEY !== lastReadKey);
+  updateNoticeBadge(
+    CURRENT_NOTICE_KEY !== lastReadKey
+  );
 }
 
 function updateNoticeBadge(show) {
-  const badge = document.querySelector(".bell .badge");
+  const badge =
+    document.querySelector(".bell .badge");
+
   if (!badge) return;
-  badge.style.display = show ? "block" : "none";
+
+  badge.style.display =
+    show ? "block" : "none";
 }
 
 function openNoticeFromBell() {
@@ -434,60 +478,74 @@ function openNoticeFromBell() {
 
 function resetNoticeReadForTest() {
   const readKey = getNoticeReadKey();
+
   localStorage.removeItem(readKey);
+
   checkNoticeBadge();
 }
 
 function loadPartners() {
   apiRequest("getPartners")
     .then(function (partners) {
-      writeDataCache(PARTNER_CACHE_KEY, partners);
-      renderPartners(partners);
-    })
-    .catch(function () {
-      const partnerPage = document.getElementById("partnerPage");
-      if (partnerPage) {
-        partnerPage.innerHTML = `<div class="section"><h2>제휴업체</h2></div><div class="card"><p>제휴업체를 불러오지 못했습니다.</p></div>`;
-      }
-    });
-}
+      const partnerPage =
+        document.getElementById("partnerPage");
 
-function renderPartners(partners) {
-      const partnerPage = document.getElementById("partnerPage");
       if (!partnerPage) return;
 
-    let html = "";
+      let html = "";
 
       if (!partners || partners.length === 0) {
-        html += `<div class="card"><p>등록된 제휴업체가 없습니다.</p></div>`;
+        html +=
+          `<div class="card"><p>등록된 제휴업체가 없습니다.</p></div>`;
+
         partnerPage.innerHTML = html;
         return;
       }
 
       html += `<div class="partner-list">`;
+
       partners.reverse();
 
       partners.forEach(function (item) {
-        const name = escapeHtml(item["업체명"] || "");
-        const benefit = escapeHtml(item["내용"] || "");
-        const link = escapeAttr(item["링크"] || "");
-        const buttonName = escapeHtml(item["버튼명"] || "자세히 보기");
-        const iconClass = getPartnerIconClass(item["아이콘"] || item["업종"] || "");
-        const logoFile = String(item["로고파일"] || "").trim();
+        const name =
+          escapeHtml(item["업체명"] || "");
 
-const partnerImage = logoFile
-  ? `<img src="logos/${encodeURIComponent(logoFile)}"
-      alt="${name}"
-      style="width:100%;height:100%;object-fit:contain;"
-      onerror="this.outerHTML='<i class=&quot;fa-solid ${iconClass}&quot;></i>';">`
-  : `<i class="fa-solid ${iconClass}"></i>`;
+        const benefit =
+          escapeHtml(item["내용"] || "");
+
+        const link =
+          escapeAttr(item["링크"] || "");
+
+        const buttonName =
+          escapeHtml(
+            item["버튼명"] || "자세히 보기"
+          );
+
+        const iconClass =
+          getPartnerIconClass(
+            item["아이콘"] ||
+            item["업종"] ||
+            ""
+          );
+
+        const logoFile =
+          String(item["로고파일"] || "").trim();
+
+        const partnerImage = logoFile
+          ? `<img src="logos/${encodeURIComponent(logoFile)}"
+              alt="${name}"
+              style="width:100%;height:100%;object-fit:contain;"
+              onerror="this.outerHTML='<i class=&quot;fa-solid ${iconClass}&quot;></i>';">`
+          : `<i class="fa-solid ${iconClass}"></i>`;
 
         html += `
           <div class="partner-card">
-          <div class="partner-icon">${partnerImage}</div>
+            <div class="partner-icon">${partnerImage}</div>
+
             <div class="partner-body">
               <h3 class="partner-name">${name}</h3>
               <p class="partner-benefit">${benefit}</p>
+
               <div class="partner-actions">
                 <button class="partner-btn" onclick="openLink('${link}')">
                   ${buttonName}
@@ -500,12 +558,27 @@ const partnerImage = logoFile
       });
 
       html += `</div>`;
+
       partnerPage.innerHTML = html;
+    })
+    .catch(function () {
+      const partnerPage =
+        document.getElementById("partnerPage");
+
+      if (partnerPage) {
+        partnerPage.innerHTML =
+          `<div class="section"><h2>제휴업체</h2></div><div class="card"><p>제휴업체를 불러오지 못했습니다.</p></div>`;
+      }
+    });
 }
 
 function getPartnerIconClass(iconValue) {
-  const raw = String(iconValue || "").trim();
-  if (!raw) return "fa-handshake";
+  const raw =
+    String(iconValue || "").trim();
+
+  if (!raw) {
+    return "fa-handshake";
+  }
 
   const iconMap = {
     "호텔": "fa-hotel",
@@ -529,56 +602,88 @@ function getPartnerIconClass(iconValue) {
     "기타": "fa-handshake"
   };
 
-  if (iconMap[raw]) return iconMap[raw];
+  if (iconMap[raw]) {
+    return iconMap[raw];
+  }
 
   const normalized = raw
     .replace(/^fa-solid\s+/g, "")
     .replace(/^fa-/g, "")
     .replace(/[^a-zA-Z0-9-]/g, "");
 
-  return normalized ? "fa-" + normalized : "fa-handshake";
+  return normalized
+    ? "fa-" + normalized
+    : "fa-handshake";
 }
 
-function loadMember(memberFromAppData) {
+function loadMember() {
   const code = getMemberCode();
 
-  const memberName = document.getElementById("memberName");
-  const memberCompany = document.getElementById("memberCompany");
-  const companyRow = document.getElementById("companyRow");
-  const positionRow = document.getElementById("positionRow");
-  const memberPosition = document.getElementById("memberPosition");
-  const memberStatus = document.getElementById("memberStatus");
-  const memberTime = document.getElementById("memberTime");
-  const memberLinkBtn = document.getElementById("memberLinkBtn");
-  const memberQR = document.getElementById("memberQR");
+  const memberName =
+    document.getElementById("memberName");
+
+  const memberCompany =
+    document.getElementById("memberCompany");
+
+  const companyRow =
+    document.getElementById("companyRow");
+
+  const positionRow =
+    document.getElementById("positionRow");
+
+  const memberPosition =
+    document.getElementById("memberPosition");
+
+  const memberStatus =
+    document.getElementById("memberStatus");
+
+  const memberTime =
+    document.getElementById("memberTime");
+
+  const memberLinkBtn =
+    document.getElementById("memberLinkBtn");
+
+  const memberQR =
+    document.getElementById("memberQR");
 
   if (!code) {
     showMemberAccessGuide();
     return;
   }
 
-  const memberRequest = memberFromAppData
-    ? Promise.resolve(memberFromAppData)
-    : apiRequest("getMemberByCode", { code: code });
-
-  memberRequest
+  apiRequest("getMemberByCode", {
+    code: code
+  })
     .then(function (member) {
       if (!member) {
-        showMemberAccessGuide("회원정보를 찾을 수 없습니다.");
+        showMemberAccessGuide(
+          "회원정보를 찾을 수 없습니다."
+        );
         return;
       }
 
-      const company = member["업체명"] || "";
-      const position = member["직위"] || "";
-      const status = member["회원상태"] || "";
-      const verifyLink = member["업체확인용링크"] || window.location.href;
+      const company =
+        member["업체명"] || "";
+
+      const position =
+        member["직위"] || "";
+
+      const status =
+        member["회원상태"] || "";
+
+      const verifyLink =
+        member["업체확인용링크"] ||
+        window.location.href;
 
       if (status && status !== "정상") {
         showMemberBlockedGuide(status);
         return;
       }
 
-      if (memberName) memberName.textContent = member["회원명"] || "";
+      if (memberName) {
+        memberName.textContent =
+          member["회원명"] || "";
+      }
 
       if (memberCompany && companyRow) {
         if (company) {
@@ -593,9 +698,11 @@ function loadMember(memberFromAppData) {
       if (memberPosition && positionRow) {
         if (position) {
           positionRow.style.display = "flex";
-          memberPosition.textContent = position === "정회원"
-            ? "회원구분 : 정회원"
-            : "직위 : " + position;
+
+          memberPosition.textContent =
+            position === "정회원"
+              ? "회원구분 : 정회원"
+              : "직위 : " + position;
         } else {
           positionRow.style.display = "none";
           memberPosition.textContent = "";
@@ -603,18 +710,28 @@ function loadMember(memberFromAppData) {
       }
 
       if (memberStatus) {
-        memberStatus.textContent = "회원상태 : " + status;
-        memberStatus.classList.remove("status-normal", "status-out");
+        memberStatus.textContent =
+          "회원상태 : " + status;
+
+        memberStatus.classList.remove(
+          "status-normal",
+          "status-out"
+        );
 
         if (status === "정상") {
-          memberStatus.classList.add("status-normal");
+          memberStatus.classList.add(
+            "status-normal"
+          );
         } else if (status === "탈퇴") {
-          memberStatus.classList.add("status-out");
+          memberStatus.classList.add(
+            "status-out"
+          );
         }
       }
 
       if (memberTime) {
-        memberTime.innerHTML = `조회시각<br>${formatNow()}`;
+        memberTime.innerHTML =
+          `조회시각<br>${formatNow()}`;
       }
 
       if (memberQR && verifyLink) {
@@ -627,31 +744,39 @@ function loadMember(memberFromAppData) {
         `;
       }
 
-      if (memberLinkBtn) memberLinkBtn.style.display = "none";
+      if (memberLinkBtn) {
+        memberLinkBtn.style.display = "none";
+      }
     })
     .catch(function () {
-      showMemberAccessGuide("회원정보를 불러오지 못했습니다.");
+      showMemberAccessGuide(
+        "회원정보를 불러오지 못했습니다."
+      );
     });
 }
 
 function showGuestOnlyGuide(pageId, btn) {
-  const page = document.getElementById(pageId);
+  const page =
+    document.getElementById(pageId);
+
   if (!page) return;
 
   page.innerHTML = `
     <div class="section">
       <h2>회원 전용 안내</h2>
     </div>
+
     <div class="card">
       <h3>회원 전용 서비스입니다.</h3>
-     <p class="guest-text">
-  공지 전체 목록, 제휴업체 혜택, 모바일 회원증은 회원 가입 후 이용하실 수 있습니다.
-</p>
 
-<hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;">
+      <p class="guest-text">
+        공지 전체 목록, 제휴업체 혜택, 모바일 회원증은 회원 가입 후 이용하실 수 있습니다.
+      </p>
 
-<p class="guest-text">회원 가입 및 이용 문의</p>
-<p class="guest-text">서산시소상공인연합회</p>
+      <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;">
+
+      <p class="guest-text">회원 가입 및 이용 문의</p>
+      <p class="guest-text">서산시소상공인연합회</p>
 
       <a href="tel:0416639999" class="phone-btn">
         ☎ 041-663-9999
@@ -659,27 +784,36 @@ function showGuestOnlyGuide(pageId, btn) {
     </div>
   `;
 
-  document.querySelectorAll(".page").forEach(function (page) {
-    page.classList.remove("active");
-  });
+  document
+    .querySelectorAll(".page")
+    .forEach(function (page) {
+      page.classList.remove("active");
+    });
 
   page.classList.add("active");
 
-  document.querySelectorAll("nav button").forEach(function (button) {
-    button.classList.remove("active");
-  });
+  document
+    .querySelectorAll("nav button")
+    .forEach(function (button) {
+      button.classList.remove("active");
+    });
 
-  if (btn) btn.classList.add("active");
+  if (btn) {
+    btn.classList.add("active");
+  }
 }
 
 function showMemberAccessGuide(message) {
-  const memberPage = document.getElementById("memberPage");
+  const memberPage =
+    document.getElementById("memberPage");
+
   if (!memberPage) return;
 
   memberPage.innerHTML = `
     <div class="section">
       <h2>모바일 회원증</h2>
     </div>
+
     <div class="card">
       <h3>모바일 회원증은 회원 전용 서비스입니다.</h3>
 
@@ -701,12 +835,16 @@ function showMemberBlockedGuide(status) {
     <div class="phone">
       <main>
         <section class="page active">
+
           <div class="section">
             <h2>회원앱 이용 안내</h2>
           </div>
 
           <div class="card">
-            <h3>회원님의 회원 자격이 종료되어<br>서비스를 이용하실 수 없습니다.</h3>
+            <h3>
+              회원님의 회원 자격이 종료되어<br>
+              서비스를 이용하실 수 없습니다.
+            </h3>
 
             <p>문의 : 서산시소상공인연합회</p>
 
@@ -714,6 +852,7 @@ function showMemberBlockedGuide(status) {
               ☎ 041-663-9999
             </a>
           </div>
+
         </section>
       </main>
     </div>
@@ -722,48 +861,86 @@ function showMemberBlockedGuide(status) {
 
 function formatNow() {
   const now = new Date();
+
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const h = String(now.getHours()).padStart(2, "0");
-  const min = String(now.getMinutes()).padStart(2, "0");
-  const s = String(now.getSeconds()).padStart(2, "0");
+
+  const m =
+    String(now.getMonth() + 1)
+      .padStart(2, "0");
+
+  const d =
+    String(now.getDate())
+      .padStart(2, "0");
+
+  const h =
+    String(now.getHours())
+      .padStart(2, "0");
+
+  const min =
+    String(now.getMinutes())
+      .padStart(2, "0");
+
+  const s =
+    String(now.getSeconds())
+      .padStart(2, "0");
+
   return `${y}.${m}.${d} ${h}:${min}:${s}`;
 }
 
 function openLink(url) {
   if (!url) return;
+
   window.open(url, "_blank");
 }
 
 function showPage(pageId, btn) {
   updateStoredMemberCode();
 
-  if (IS_GUEST_NOTICE_MODE && !["homePage", "noticeDetailPage", "contactPage"].includes(pageId)) {
+  if (
+    IS_GUEST_NOTICE_MODE &&
+    ![
+      "homePage",
+      "noticeDetailPage",
+      "contactPage"
+    ].includes(pageId)
+  ) {
     showGuestOnlyGuide(pageId, btn);
     return;
   }
 
-  if (pageId === "memberPage" && !getMemberCode()) {
+  if (
+    pageId === "memberPage" &&
+    !getMemberCode()
+  ) {
     showMemberAccessGuide();
   }
 
-  document.querySelectorAll(".page").forEach(function (page) {
-    page.classList.remove("active");
-  });
+  document
+    .querySelectorAll(".page")
+    .forEach(function (page) {
+      page.classList.remove("active");
+    });
 
-  const page = document.getElementById(pageId);
-  if (page) page.classList.add("active");
+  const page =
+    document.getElementById(pageId);
 
-  document.querySelectorAll("nav button").forEach(function (button) {
-    button.classList.remove("active");
-  });
+  if (page) {
+    page.classList.add("active");
+  }
+
+  document
+    .querySelectorAll("nav button")
+    .forEach(function (button) {
+      button.classList.remove("active");
+    });
 
   if (pageId === "noticePage") {
     markNoticeAsRead();
   }
 
-  if (btn) btn.classList.add("active");
+  if (btn) {
+    btn.classList.add("active");
+  }
 }
 
 function escapeHtml(value) {
@@ -776,7 +953,8 @@ function escapeHtml(value) {
 }
 
 function escapeAttr(value) {
-  return escapeHtml(value).replace(/`/g, "&#096;");
+  return escapeHtml(value)
+    .replace(/`/g, "&#096;");
 }
 
 function registerServiceWorker() {
@@ -790,29 +968,63 @@ function registerServiceWorker() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", function () {
-  const installBtn = document.getElementById("installBtn");
-  if (!installBtn) return;
+document.addEventListener(
+  "DOMContentLoaded",
+  function () {
+    const installBtn =
+      document.getElementById("installBtn");
 
-  installBtn.addEventListener("click", function () {
-    showHomeInstallChoice();
-  });
-});
+    if (!installBtn) return;
+
+    installBtn.addEventListener(
+      "click",
+      function () {
+        showHomeInstallChoice();
+      }
+    );
+  }
+);
 
 function showHomeInstallChoice() {
   removeHomeInstallModal();
 
-  const modal = document.createElement("div");
-  modal.id = "homeInstallModal";
-  modal.innerHTML = `
-    <div class="home-install-backdrop" onclick="removeHomeInstallModal()"></div>
-    <div class="home-install-box">
-      <button class="home-install-close" onclick="removeHomeInstallModal()">×</button>
-      <h3>📱 홈 화면에 추가하기</h3>
-      <p>사용 중인 휴대폰을 선택해 주세요.</p>
+  const modal =
+    document.createElement("div");
 
-      <button class="home-install-choice" onclick="showGalaxyInstallGuide()">🤖 갤럭시</button>
-      <button class="home-install-choice" onclick="showIphoneInstallGuide()">🍎 아이폰</button>
+  modal.id = "homeInstallModal";
+
+  modal.innerHTML = `
+    <div
+      class="home-install-backdrop"
+      onclick="removeHomeInstallModal()">
+    </div>
+
+    <div class="home-install-box">
+
+      <button
+        class="home-install-close"
+        onclick="removeHomeInstallModal()">
+        ×
+      </button>
+
+      <h3>📱 홈 화면에 추가하기</h3>
+
+      <p>
+        사용 중인 휴대폰을 선택해 주세요.
+      </p>
+
+      <button
+        class="home-install-choice"
+        onclick="showGalaxyInstallGuide()">
+        🤖 갤럭시
+      </button>
+
+      <button
+        class="home-install-choice"
+        onclick="showIphoneInstallGuide()">
+        🍎 아이폰
+      </button>
+
     </div>
   `;
 
@@ -843,13 +1055,22 @@ function showIphoneInstallGuide() {
 }
 
 function removeHomeInstallModal() {
-  const modal = document.getElementById("homeInstallModal");
-  if (modal) modal.remove();
+  const modal =
+    document.getElementById(
+      "homeInstallModal"
+    );
+
+  if (modal) {
+    modal.remove();
+  }
 }
 
 function refreshMemberTime() {
-  const memberTime = document.getElementById("memberTime");
+  const memberTime =
+    document.getElementById("memberTime");
+
   if (!memberTime) return;
 
-  memberTime.innerHTML = `조회시각<br>${formatNow()}`;
+  memberTime.innerHTML =
+    `조회시각<br>${formatNow()}`;
 }
